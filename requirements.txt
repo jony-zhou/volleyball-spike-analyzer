@@ -1,0 +1,23 @@
+# Core Dependencies
+mediapipe>=0.10.9
+opencv-python>=4.8.1.78
+numpy>=1.24.0
+
+# Frontend
+streamlit>=1.29.0
+
+# Visualization
+plotly>=5.18.0
+
+# Data Processing
+pandas>=2.1.4
+
+# Configuration
+pyyaml>=6.0.1
+
+# Development & Testing
+pytest>=7.4.3
+pytest-cov>=4.1.0
+black>=23.12.1
+flake8>=7.0.0
+mypy>=1.8.0
