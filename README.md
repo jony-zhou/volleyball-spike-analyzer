@@ -2,7 +2,7 @@
 
 A computer vision-based system for analyzing volleyball spike techniques using pose estimation and 3D visualization.
 
-![3D Skeleton Animation](./assets/3d-skeleton-animation.png)
+![3D Skeleton Animation](./assets/3d-skeleton-animation.gif)
 
 ## ✨ Features
 
