@@ -1,130 +1,141 @@
-# Volleyball Spike Analyzer
+# 🏐 Volleyball Spike Analyzer
 
 A computer vision-based system for analyzing volleyball spike techniques using pose estimation and 3D visualization.
 
-## Features
+![3D Skeleton Animation](./assets/3d-skeleton-animation.png)
 
-- **Video Upload**: Support for multiple video formats (MP4, AVI, MOV, MKV)
-- **Pose Extraction**: Real-time skeleton tracking using MediaPipe Pose
-- **2D & 3D Coordinates**: Extract both 2D and 3D landmark positions
-- **3D Visualization**: Interactive 3D skeleton animation using Plotly
-- **Data Export**: Export pose data to CSV/JSON for further analysis
-- **Web Interface**: User-friendly interface built with Streamlit
+## ✨ Features
 
-## Project Structure
+- **📹 Video Upload** - Support for multiple video formats (MP4, AVI, MOV, MKV)
+- **🤖 Pose Extraction** - Real-time skeleton tracking using MediaPipe Pose
+- **📊 2D & 3D Coordinates** - Extract both 2D and 3D landmark positions
+- **🎬 3D Visualization** - Interactive 3D skeleton animation using Plotly
+- **📈 Biomechanical Analysis** - Calculate joint angles, velocities, and trajectories
+- **💾 Data Export** - Export pose data to CSV/JSON for further analysis
+- **🖥️ Web Interface** - User-friendly interface built with Streamlit
 
-```
-volleyball-spike-analyzer/
-├── .gitignore
-├── requirements.txt
-├── README.md
-├── config/
-│   └── config.yaml          # Configuration settings
-├── src/
-│   ├── __init__.py
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── pose_extractor.py      # MediaPipe pose extraction
-│   │   └── skeleton_processor.py  # Skeleton data processing
-│   ├── visualization/
-│   │   ├── __init__.py
-│   │   ├── video_overlay.py       # 2D skeleton overlay
-│   │   └── skeleton_3d.py         # 3D visualization
-│   └── utils/
-│       ├── __init__.py
-│       ├── video_io.py            # Video I/O operations
-│       └── data_export.py         # Data export utilities
-├── tests/
-│   └── test_pose_extractor.py
-├── data/
-│   ├── input/                     # Input videos
-│   ├── output/                    # Processed results
-│   └── cache/                     # Temporary cache
-└── app.py                         # Streamlit application
-
-```
-
-## Installation
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - Python 3.8 or higher
 - pip package manager
 
-### Setup
+### Installation
 
-1. Clone the repository:
+1. **Clone the repository**
 ```bash
 git clone <repository-url>
 cd volleyball-spike-analyzer
 ```
 
-2. Create a virtual environment (recommended):
+2. **Create a virtual environment** (recommended)
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# On Windows
+venv\Scripts\activate
+
+# On macOS/Linux
+source venv/bin/activate
 ```
 
-3. Install dependencies:
+3. **Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
-
 ### Running the Application
 
 Start the Streamlit web interface:
+
 ```bash
 streamlit run app.py
 ```
 
-The application will open in your default web browser (typically at `http://localhost:8501`).
+The application will open in your default web browser at `http://localhost:8501`.
 
-### Basic Workflow
+## 📖 How to Use
 
-1. **Upload Video**: Upload a volleyball spike video (MP4, AVI, MOV, or MKV)
-2. **Extract Pose**: The system automatically extracts skeleton data
-3. **View Results**:
-   - Watch the original video with 2D skeleton overlay
-   - Explore the interactive 3D skeleton animation
-   - Download pose data for further analysis
+### 1. Upload Your Video
 
-### Configuration
+Upload a volleyball spike video in MP4, AVI, MOV, or MKV format.
 
-Edit `config/config.yaml` to customize:
-- MediaPipe model settings (accuracy vs. speed)
-- Video processing parameters
-- Visualization styles
-- Export formats and options
+![Upload Video](./assets/upload-video.png)
 
-## Development
+### 2. View 3D Skeleton Animation
 
-### Running Tests
+Explore the interactive 3D skeleton animation with play/pause controls and frame-by-frame navigation.
 
-```bash
-pytest tests/
+![3D Skeleton Animation](./assets/3d-skeleton-animation.png)
+
+### 3. Analyze Joint Angles
+
+Review detailed joint angle measurements for shoulders, elbows, hips, and knees.
+
+![Joint Angle Analysis](./assets/joint-angle-analysis.png)
+
+### 4. Download Results
+
+Export the analysis results:
+- **3D Landmarks (CSV)** - Complete 3D coordinate data
+- **Joint Angles (CSV)** - Frame-by-frame angle measurements
+- **Summary (JSON)** - Statistical summary of the analysis
+
+## 🏗️ Project Structure
+
+```
+volleyball-spike-analyzer/
+├── app.py                      # Main Streamlit application
+├── config/
+│   └── config.yaml             # Configuration settings
+├── src/
+│   ├── core/
+│   │   ├── pose_extractor.py      # MediaPipe pose extraction
+│   │   └── skeleton_processor.py  # Skeleton data processing
+│   ├── visualization/
+│   │   ├── video_overlay.py       # 2D skeleton overlay
+│   │   └── skeleton_3d.py         # 3D visualization
+│   └── utils/
+│       ├── video_io.py            # Video I/O operations
+│       └── data_export.py         # Data export utilities
+├── tests/
+│   └── test_pose_extractor.py  # Unit tests
+└── data/
+    ├── input/                  # Input videos
+    ├── output/                 # Processed results
+    └── cache/                  # Temporary cache
 ```
 
-### Code Quality
+## ⚙️ Configuration
 
-Run linting and type checking:
-```bash
-# Format code
-black src/ tests/
+Customize the system by editing `config/config.yaml`:
 
-# Lint
-flake8 src/ tests/
+### MediaPipe Settings
+- **model_complexity** (0-2): Higher values = more accurate but slower
+- **min_detection_confidence** (0.0-1.0): Minimum confidence for initial detection
+- **min_tracking_confidence** (0.0-1.0): Minimum confidence for tracking
 
-# Type check
-mypy src/
-```
+### Video Processing
+- **max_file_size_mb**: Maximum upload size (default: 500MB)
+- **output_fps**: Output video frame rate (default: 30)
+- **resize_width/height**: Optional video resizing (default: 1280x720)
 
-## Technical Details
+### Visualization
+- **landmark_color**: RGB color for joint markers (default: green)
+- **connection_color**: RGB color for skeleton lines (default: red)
+- **figure_width/height**: Size of 3D plots (default: 1200x800)
+
+### Analysis
+- **calculate_angles**: Enable joint angle calculation
+- **calculate_velocities**: Enable velocity calculation
+- **smoothing_window**: Window size for trajectory smoothing (default: 5)
+
+## 🔬 Technical Details
 
 ### MediaPipe Pose
 
-This project uses MediaPipe Pose for human pose estimation:
+This project uses [MediaPipe Pose](https://google.github.io/mediapipe/solutions/pose.html) for human pose estimation:
 - **33 body landmarks** in 2D (x, y, visibility)
 - **33 body landmarks** in 3D (x, y, z, visibility)
 - Real-time performance on CPU
@@ -132,48 +143,98 @@ This project uses MediaPipe Pose for human pose estimation:
 
 ### Key Landmarks for Spike Analysis
 
-- Shoulders (left/right)
-- Elbows (left/right)
-- Wrists (left/right)
-- Hips (left/right)
-- Knees (left/right)
-- Ankles (left/right)
+The system focuses on 12 key joints for volleyball spike analysis:
+- **Upper Body**: Left/Right Shoulder, Elbow, Wrist
+- **Lower Body**: Left/Right Hip, Knee, Ankle
 
-## Roadmap
+### Data Output Formats
 
-### Phase 1: MVP (Current)
+- **CSV**: Tabular data with timestamps for easy analysis in Excel/Python
+- **JSON**: Structured data with metadata for programmatic use
+- **Parquet**: High-performance format for large datasets (optional)
+
+## 🧪 Development
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run with coverage
+pytest tests/ --cov=src --cov-report=html
+
+# Run specific test file
+pytest tests/test_pose_extractor.py -v
+```
+
+### Code Quality
+
+```bash
+# Format code
+black src/ tests/
+
+# Lint code
+flake8 src/ tests/
+
+# Type check
+mypy src/
+```
+
+### Project Guidelines
+
+- **Type Hints**: All functions include type annotations
+- **Docstrings**: Google-style docstrings for all public APIs
+- **Error Handling**: Comprehensive input validation and exception handling
+- **Testing**: Unit tests for core functionality
+
+## 🗺️ Roadmap
+
+### ✅ Phase 1: MVP (Current)
 - [x] Project structure setup
-- [ ] Basic pose extraction
-- [ ] 2D video overlay
-- [ ] 3D skeleton visualization
-- [ ] Simple Streamlit interface
+- [x] Basic pose extraction
+- [x] 3D skeleton visualization
+- [x] Streamlit interface
+- [x] Data export functionality
 
-### Phase 2: Analysis
-- [ ] Joint angle calculation
+### 📋 Phase 2: Enhanced Analysis
+- [ ] Automatic spike phase detection (approach, jump, hit, landing)
 - [ ] Velocity and acceleration metrics
-- [ ] Spike phase detection (approach, jump, hit, landing)
+- [ ] Power calculation and jump height estimation
+- [ ] Side-by-side comparison of multiple videos
 - [ ] Performance metrics dashboard
 
-### Phase 3: Advanced Features
-- [ ] Multi-player comparison
+### 🚀 Phase 3: Advanced Features
+- [ ] Multi-player tracking
 - [ ] Technique scoring system
 - [ ] Movement recommendations
 - [ ] Historical trend analysis
+- [ ] Export to video with overlays
+- [ ] Batch processing for multiple videos
 
-## Contributing
+## 🤝 Contributing
 
-This is a personal side project, but suggestions and improvements are welcome!
+This is a personal side project, but contributions are welcome! Please feel free to:
+- Report bugs or issues
+- Suggest new features
+- Submit pull requests
+- Share your analysis results
 
-## License
+## 📄 License
 
 MIT License - Feel free to use and modify for your own projects.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-- [MediaPipe](https://google.github.io/mediapipe/) for pose estimation
-- [Streamlit](https://streamlit.io/) for the web interface
-- [Plotly](https://plotly.com/) for 3D visualization
+- [MediaPipe](https://google.github.io/mediapipe/) - Pose estimation framework
+- [Streamlit](https://streamlit.io/) - Web application framework
+- [Plotly](https://plotly.com/) - Interactive 3D visualizations
+- [OpenCV](https://opencv.org/) - Computer vision library
 
-## Contact
+## 📧 Contact
 
-For questions or feedback, please open an issue on GitHub.
+For questions, feedback, or collaboration opportunities, please open an issue on GitHub.
+
+---
+
+**Made with ❤️ for volleyball players and coaches**
