@@ -12,6 +12,9 @@ from typing import Optional
 import streamlit as st
 import yaml
 import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
 
 from src.core.pose_extractor import PoseExtractor
 from src.core.skeleton_processor import SkeletonProcessor
@@ -19,6 +22,8 @@ from src.utils.video_io import VideoReader, validate_video_file
 from src.utils.data_export import DataExporter
 from src.visualization.video_overlay import VideoOverlay
 from src.visualization.skeleton_3d import Skeleton3D
+from src.analysis.phase_detector import FullMotionPhaseDetector, ArmSwingPhaseDetector
+from src.analysis.joint_angles import JointAngleCalculator
 
 # Configure logging
 logging.basicConfig(
@@ -43,6 +48,275 @@ def load_config() -> dict:
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     return config
+
+
+def display_phase_analysis(
+    phases: Optional[dict],
+    arm_swing_phases: Optional[dict],
+    skeleton_df: pd.DataFrame,
+    fps: float
+):
+    """
+    Display phase analysis results.
+
+    Args:
+        phases: Dictionary of main motion phases.
+        arm_swing_phases: Dictionary of arm swing sub-phases.
+        skeleton_df: Skeleton DataFrame.
+        fps: Frames per second.
+    """
+    st.subheader("Motion Phase Detection")
+
+    if phases is None:
+        st.warning("⚠️ Phase detection failed. This may be due to incomplete motion in the video.")
+        return
+
+    # Display phase timing table
+    st.markdown("### Phase Timing")
+
+    phase_data = []
+    for phase_name, bounds in phases.items():
+        start_frame = bounds['start']
+        end_frame = bounds['end']
+        start_time = start_frame / fps
+        end_time = end_frame / fps
+        duration = end_time - start_time
+
+        phase_data.append({
+            'Phase': phase_name.replace('_', ' ').title(),
+            'Start Frame': start_frame,
+            'End Frame': end_frame,
+            'Start Time (s)': f"{start_time:.2f}",
+            'End Time (s)': f"{end_time:.2f}",
+            'Duration (s)': f"{duration:.2f}"
+        })
+
+    phase_table = pd.DataFrame(phase_data)
+    st.dataframe(phase_table, use_container_width=True)
+
+    # Display arm swing sub-phases
+    if arm_swing_phases:
+        st.markdown("### Arm Swing Sub-Phases")
+
+        sub_phase_data = []
+        for phase_name, bounds in arm_swing_phases.items():
+            start_frame = bounds['start']
+            end_frame = bounds['end']
+            start_time = start_frame / fps
+            end_time = end_frame / fps
+            duration = end_time - start_time
+
+            phase_name_display = {
+                'phase_i': 'Phase I (Initiation)',
+                'phase_ii': 'Phase II (Wind-up)',
+                'phase_iii': 'Phase III (Final Cocking)'
+            }.get(phase_name, phase_name)
+
+            sub_phase_data.append({
+                'Sub-Phase': phase_name_display,
+                'Start Frame': start_frame,
+                'End Frame': end_frame,
+                'Duration (s)': f"{duration:.2f}",
+                'Percentage': f"{duration / (phases['arm_swing']['end'] - phases['arm_swing']['start']) * fps * 100:.1f}%"
+            })
+
+        sub_phase_table = pd.DataFrame(sub_phase_data)
+        st.dataframe(sub_phase_table, use_container_width=True)
+
+    # Create interactive timeline visualization
+    st.markdown("### Phase Timeline")
+
+    fig = go.Figure()
+
+    # Define colors for each phase
+    phase_colors = {
+        'approach': 'lightblue',
+        'takeoff': 'lightgreen',
+        'arm_swing': 'lightyellow',
+        'contact': 'lightcoral',
+        'landing': 'lightgray'
+    }
+
+    # Add main phases to timeline
+    for phase_name, bounds in phases.items():
+        start_time = bounds['start'] / fps
+        end_time = bounds['end'] / fps
+
+        fig.add_trace(go.Scatter(
+            x=[start_time, end_time, end_time, start_time, start_time],
+            y=[0, 0, 1, 1, 0],
+            fill='toself',
+            fillcolor=phase_colors.get(phase_name, 'lightgray'),
+            line=dict(color='black', width=2),
+            name=phase_name.replace('_', ' ').title(),
+            hovertemplate=f"{phase_name.replace('_', ' ').title()}<br>Time: %{{x:.2f}}s<extra></extra>"
+        ))
+
+    # Add arm swing sub-phases if available
+    if arm_swing_phases:
+        sub_phase_colors = {
+            'phase_i': 'yellow',
+            'phase_ii': 'orange',
+            'phase_iii': 'red'
+        }
+
+        for phase_name, bounds in arm_swing_phases.items():
+            start_time = bounds['start'] / fps
+            end_time = bounds['end'] / fps
+
+            phase_display = {
+                'phase_i': 'Phase I',
+                'phase_ii': 'Phase II',
+                'phase_iii': 'Phase III'
+            }.get(phase_name, phase_name)
+
+            fig.add_trace(go.Scatter(
+                x=[start_time, end_time, end_time, start_time, start_time],
+                y=[1.2, 1.2, 1.5, 1.5, 1.2],
+                fill='toself',
+                fillcolor=sub_phase_colors.get(phase_name, 'gray'),
+                line=dict(color='darkred', width=1),
+                name=phase_display,
+                hovertemplate=f"{phase_display}<br>Time: %{{x:.2f}}s<extra></extra>"
+            ))
+
+    fig.update_layout(
+        title="Motion Phase Timeline",
+        xaxis_title="Time (seconds)",
+        yaxis_title="",
+        yaxis=dict(showticklabels=False, range=[-0.2, 1.7]),
+        height=400,
+        hovermode='x unified',
+        showlegend=True
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def display_joint_angles(
+    angles_df: pd.DataFrame,
+    phases: Optional[dict],
+    arm_swing_phases: Optional[dict]
+):
+    """
+    Display joint angle analysis results.
+
+    Args:
+        angles_df: DataFrame containing joint angles over time.
+        phases: Dictionary of main motion phases.
+        arm_swing_phases: Dictionary of arm swing sub-phases.
+    """
+    st.subheader("Joint Angle Analysis")
+
+    if angles_df is None or len(angles_df) == 0:
+        st.warning("⚠️ No angle data available")
+        return
+
+    # Display angle statistics by phase
+    if phases:
+        st.markdown("### Average Angles by Phase")
+
+        # Calculate average angles for each phase
+        angle_columns = ['shoulder_abduction', 'shoulder_horizontal_abduction',
+                        'elbow_flexion', 'torso_rotation', 'torso_lean']
+
+        phase_stats = []
+        for phase_name, bounds in phases.items():
+            start_frame = bounds['start']
+            end_frame = bounds['end']
+
+            phase_angles = angles_df.iloc[start_frame:end_frame + 1]
+
+            stats = {
+                'Phase': phase_name.replace('_', ' ').title()
+            }
+
+            for angle_col in angle_columns:
+                mean_val = phase_angles[angle_col].mean()
+                stats[angle_col.replace('_', ' ').title()] = f"{mean_val:.1f}°" if not np.isnan(mean_val) else "N/A"
+
+            phase_stats.append(stats)
+
+        stats_df = pd.DataFrame(phase_stats)
+        st.dataframe(stats_df, use_container_width=True)
+
+    # Interactive angle time series plot
+    st.markdown("### Angle Time Series")
+
+    # Select which angle to display
+    angle_options = {
+        'Shoulder Abduction': 'shoulder_abduction',
+        'Shoulder Horizontal Abduction': 'shoulder_horizontal_abduction',
+        'Elbow Flexion': 'elbow_flexion',
+        'Torso Rotation': 'torso_rotation',
+        'Torso Lean': 'torso_lean'
+    }
+
+    selected_angles = st.multiselect(
+        "Select angles to display:",
+        options=list(angle_options.keys()),
+        default=['Elbow Flexion', 'Shoulder Abduction']
+    )
+
+    if selected_angles:
+        fig = go.Figure()
+
+        for angle_display in selected_angles:
+            angle_col = angle_options[angle_display]
+            fig.add_trace(go.Scatter(
+                x=angles_df['time'],
+                y=angles_df[angle_col],
+                mode='lines',
+                name=angle_display,
+                line=dict(width=2)
+            ))
+
+        # Add phase boundaries as vertical lines
+        if phases:
+            for phase_name, bounds in phases.items():
+                start_time = angles_df.iloc[bounds['start']]['time']
+                fig.add_vline(
+                    x=start_time,
+                    line_dash="dash",
+                    line_color="gray",
+                    annotation_text=phase_name.replace('_', ' ').title(),
+                    annotation_position="top"
+                )
+
+        # Add arm swing sub-phase boundaries
+        if arm_swing_phases:
+            for phase_name, bounds in arm_swing_phases.items():
+                start_time = angles_df.iloc[bounds['start']]['time']
+                phase_display = {
+                    'phase_i': 'Phase I',
+                    'phase_ii': 'Phase II',
+                    'phase_iii': 'Phase III'
+                }.get(phase_name, phase_name)
+
+                fig.add_vline(
+                    x=start_time,
+                    line_dash="dot",
+                    line_color="red",
+                    annotation_text=phase_display,
+                    annotation_position="bottom"
+                )
+
+        fig.update_layout(
+            title="Joint Angles Over Time",
+            xaxis_title="Time (seconds)",
+            yaxis_title="Angle (degrees)",
+            height=500,
+            hovermode='x unified',
+            showlegend=True
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Please select at least one angle to display")
+
+    # Display raw angle data
+    with st.expander("View Raw Angle Data"):
+        st.dataframe(angles_df, use_container_width=True)
 
 
 def main():
@@ -179,52 +453,89 @@ def process_video(
         )
 
         processed_data = processor.process_sequence(landmarks_sequence, fps=fps)
+        progress_bar.progress(60)
+
+        # Step 3: Prepare DataFrame for analysis
+        status_text.text("⏳ Preparing data for analysis...")
+
+        # Create DataFrame with frame, time, and landmarks
+        skeleton_df = pd.DataFrame({
+            'frame': range(len(processed_data['landmarks_3d_smooth'])),
+            'time': [i / fps for i in range(len(processed_data['landmarks_3d_smooth']))],
+            'landmarks_3d': list(processed_data['landmarks_3d_smooth'])
+        })
+
+        # Step 4: Phase detection
+        status_text.text("⏳ Detecting motion phases...")
+        phase_detector = FullMotionPhaseDetector()
+        phases = phase_detector.detect_phases(skeleton_df)
+
+        # Detect arm swing sub-phases if main phases detected
+        arm_swing_phases = None
+        if phases and 'arm_swing' in phases:
+            arm_swing_detector = ArmSwingPhaseDetector()
+            arm_swing_phases = arm_swing_detector.detect_sub_phases(
+                skeleton_df,
+                phases['arm_swing']['start'],
+                phases['arm_swing']['end']
+            )
+
         progress_bar.progress(70)
 
-        # Step 3: Create visualizations
+        # Step 5: Calculate joint angles
+        status_text.text("⏳ Calculating joint angles...")
+        angle_calculator = JointAngleCalculator()
+        angles_df = angle_calculator.calculate_angles_timeseries(skeleton_df)
+        progress_bar.progress(75)
+
+        # Step 6: Create visualizations
         status_text.text("⏳ Creating visualizations...")
 
-        # 3D Animation
-        if show_3d_animation:
-            st.header("🎬 3D Skeleton Animation")
+        progress_bar.progress(80)
 
-            visualizer_3d = Skeleton3D(
-                figure_width=config['visualization']['figure_width'],
-                figure_height=config['visualization']['figure_height']
-            )
+        # Create tabs for different views
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📹 Video Preview",
+            "🦴 3D Skeleton",
+            "📊 Phase Analysis",
+            "📈 Joint Angles"
+        ])
 
-            fig_3d = visualizer_3d.create_animation(
-                processed_data['landmarks_3d_smooth'],
-                fps=fps
-            )
+        # Tab 1: Video Preview
+        with tab1:
+            st.subheader("Original Video")
+            st.video(video_path)
 
-            st.plotly_chart(fig_3d, use_container_width=True)
+        # Tab 2: 3D Skeleton Animation
+        with tab2:
+            if show_3d_animation:
+                st.subheader("3D Skeleton Animation")
+
+                visualizer_3d = Skeleton3D(
+                    figure_width=config['visualization']['figure_width'],
+                    figure_height=config['visualization']['figure_height']
+                )
+
+                fig_3d = visualizer_3d.create_animation(
+                    processed_data['landmarks_3d_smooth'],
+                    fps=fps
+                )
+
+                st.plotly_chart(fig_3d, use_container_width=True)
+            else:
+                st.info("3D animation is disabled in settings")
+
+        # Tab 3: Phase Analysis
+        with tab3:
+            display_phase_analysis(phases, arm_swing_phases, skeleton_df, fps)
+
+        # Tab 4: Joint Angles
+        with tab4:
+            display_joint_angles(angles_df, phases, arm_swing_phases)
 
         progress_bar.progress(85)
 
-        # Display analysis results
-        if calculate_angles and 'angles' in processed_data:
-            st.header("📊 Joint Angle Analysis")
-
-            # Show angles for a sample frame (middle of video)
-            mid_frame = len(processed_data['angles']) // 2
-            angles_mid = processed_data['angles'][mid_frame]
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.subheader("Right Side")
-                for joint in ['right_shoulder', 'right_elbow', 'right_hip', 'right_knee']:
-                    if joint in angles_mid:
-                        st.metric(joint.replace('_', ' ').title(), f"{angles_mid[joint]:.1f}°")
-
-            with col2:
-                st.subheader("Left Side")
-                for joint in ['left_shoulder', 'left_elbow', 'left_hip', 'left_knee']:
-                    if joint in angles_mid:
-                        st.metric(joint.replace('_', ' ').title(), f"{angles_mid[joint]:.1f}°")
-
-        # Step 4: Export data
+        # Step 7: Export data
         status_text.text("⏳ Exporting data...")
         progress_bar.progress(95)
 
