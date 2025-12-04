@@ -24,6 +24,9 @@ from src.visualization.video_overlay import VideoOverlay
 from src.visualization.skeleton_3d import Skeleton3D
 from src.analysis.phase_detector import FullMotionPhaseDetector, ArmSwingPhaseDetector
 from src.analysis.joint_angles import JointAngleCalculator
+from src.analysis.velocity_calculator import VelocityCalculator
+from src.analysis.spatial_metrics import SpatialMetricsCalculator
+from src.analysis.metrics_summary import MetricsSummary
 
 # Configure logging
 logging.basicConfig(
@@ -319,6 +322,276 @@ def display_joint_angles(
         st.dataframe(angles_df, use_container_width=True)
 
 
+def display_performance_metrics(
+    velocity_data: Optional[dict],
+    velocity_df: Optional[pd.DataFrame],
+    spatial_data: Optional[dict],
+    phases: Optional[dict],
+    skeleton_df: pd.DataFrame
+):
+    """
+    Display performance metrics including velocities and spatial metrics.
+
+    Args:
+        velocity_data: Dictionary containing velocity metrics.
+        velocity_df: DataFrame with velocity timeseries.
+        spatial_data: Dictionary containing spatial metrics.
+        phases: Dictionary of phase boundaries.
+        skeleton_df: Skeleton DataFrame.
+    """
+    st.subheader("Performance Metrics")
+
+    # Velocity Dashboard
+    st.markdown("### 📊 Velocity Dashboard")
+
+    if velocity_data:
+        # Create metrics cards
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if 'wrist_velocity' in velocity_data:
+                wrist_vel = velocity_data['wrist_velocity']
+                st.metric(
+                    "Max Wrist Velocity",
+                    f"{wrist_vel.get('max', 0):.2f} m/s",
+                    help="Maximum velocity of the wrist during the spike"
+                )
+                st.metric(
+                    "Avg Wrist Velocity",
+                    f"{wrist_vel.get('mean', 0):.2f} m/s",
+                    help="Average velocity of the wrist"
+                )
+                if 'at_contact' in wrist_vel:
+                    st.metric(
+                        "Velocity at Contact",
+                        f"{wrist_vel['at_contact']:.2f} m/s",
+                        help="Wrist velocity at ball contact"
+                    )
+
+        with col2:
+            if 'elbow_velocity' in velocity_data:
+                elbow_vel = velocity_data['elbow_velocity']
+                st.metric(
+                    "Max Elbow Velocity",
+                    f"{elbow_vel.get('max', 0):.2f} m/s"
+                )
+            if 'shoulder_velocity' in velocity_data:
+                shoulder_vel = velocity_data['shoulder_velocity']
+                st.metric(
+                    "Max Shoulder Velocity",
+                    f"{shoulder_vel.get('max', 0):.2f} m/s"
+                )
+
+        with col3:
+            if 'shoulder_angular_velocity' in velocity_data:
+                shoulder_ang_vel = velocity_data['shoulder_angular_velocity']
+                st.metric(
+                    "Max Shoulder Angular Vel",
+                    f"{shoulder_ang_vel.get('max', 0):.1f} °/s",
+                    help="Maximum angular velocity of shoulder joint"
+                )
+            if 'elbow_angular_velocity' in velocity_data:
+                elbow_ang_vel = velocity_data['elbow_angular_velocity']
+                st.metric(
+                    "Max Elbow Angular Vel",
+                    f"{elbow_ang_vel.get('max', 0):.1f} °/s",
+                    help="Maximum angular velocity of elbow joint"
+                )
+
+    # Spatial Metrics Dashboard
+    st.markdown("### 📏 Spatial Metrics")
+
+    if spatial_data:
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            if 'jump_height' in spatial_data:
+                jump_height = spatial_data['jump_height'].get('recommended', np.nan)
+                if not np.isnan(jump_height):
+                    st.metric(
+                        "Jump Height",
+                        f"{jump_height:.2f} m",
+                        help="Estimated vertical jump height"
+                    )
+
+        with col2:
+            if 'contact_height' in spatial_data:
+                contact_height = spatial_data['contact_height']
+                if not np.isnan(contact_height):
+                    st.metric(
+                        "Contact Height",
+                        f"{contact_height:.2f} m",
+                        help="Height of wrist at ball contact"
+                    )
+
+        with col3:
+            if 'jump_height' in spatial_data and 'flight_time' in spatial_data['jump_height']:
+                flight_time = spatial_data['jump_height']['flight_time']
+                if not np.isnan(flight_time):
+                    st.metric(
+                        "Flight Time",
+                        f"{flight_time:.2f} s",
+                        help="Time spent in the air"
+                    )
+
+        with col4:
+            if 'horizontal_displacement' in spatial_data:
+                h_disp = spatial_data['horizontal_displacement'].get('total_displacement', np.nan)
+                if not np.isnan(h_disp):
+                    st.metric(
+                        "Horizontal Reach",
+                        f"{h_disp:.2f} m",
+                        help="Horizontal distance from takeoff to contact"
+                    )
+
+        # Detailed spatial metrics
+        with st.expander("Detailed Spatial Metrics"):
+            if 'jump_height' in spatial_data:
+                st.markdown("**Jump Height Methods:**")
+                jh = spatial_data['jump_height']
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"Method 1 (Hip Displacement): {jh.get('method_1_hip_displacement', np.nan):.3f} m")
+                with col2:
+                    st.write(f"Method 2 (Flight Time): {jh.get('method_2_flight_time', np.nan):.3f} m")
+
+            if 'horizontal_displacement' in spatial_data:
+                st.markdown("**Horizontal Displacement Components:**")
+                hd = spatial_data['horizontal_displacement']
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"Forward (Z-axis): {hd.get('forward_displacement', np.nan):.3f} m")
+                with col2:
+                    st.write(f"Lateral (X-axis): {hd.get('lateral_displacement', np.nan):.3f} m")
+
+    # Velocity Time Series Plot
+    st.markdown("### 📈 Velocity Time Series")
+
+    if velocity_df is not None and len(velocity_df) > 0:
+        # Select velocities to display
+        velocity_options = {
+            'Wrist Velocity': 'wrist_velocity',
+            'Elbow Velocity': 'elbow_velocity',
+            'Shoulder Velocity': 'shoulder_velocity'
+        }
+
+        selected_velocities = st.multiselect(
+            "Select velocities to display:",
+            options=list(velocity_options.keys()),
+            default=['Wrist Velocity']
+        )
+
+        if selected_velocities:
+            fig = go.Figure()
+
+            for vel_display in selected_velocities:
+                vel_col = velocity_options[vel_display]
+                if vel_col in velocity_df.columns:
+                    fig.add_trace(go.Scatter(
+                        x=velocity_df['time'],
+                        y=velocity_df[vel_col],
+                        mode='lines',
+                        name=vel_display,
+                        line=dict(width=2)
+                    ))
+
+            # Add phase boundaries
+            if phases:
+                # Mark contact phase
+                if 'contact' in phases:
+                    contact_time = velocity_df.iloc[phases['contact']['start']]['time']
+                    fig.add_vline(
+                        x=contact_time,
+                        line_dash="dash",
+                        line_color="red",
+                        line_width=2,
+                        annotation_text="Ball Contact",
+                        annotation_position="top"
+                    )
+
+                # Mark other phase boundaries
+                for phase_name in ['takeoff', 'arm_swing', 'landing']:
+                    if phase_name in phases:
+                        start_time = velocity_df.iloc[phases[phase_name]['start']]['time']
+                        fig.add_vline(
+                            x=start_time,
+                            line_dash="dot",
+                            line_color="gray",
+                            annotation_text=phase_name.replace('_', ' ').title(),
+                            annotation_position="bottom"
+                        )
+
+            fig.update_layout(
+                title="Linear Velocity Over Time",
+                xaxis_title="Time (seconds)",
+                yaxis_title="Velocity (m/s)",
+                height=500,
+                hovermode='x unified',
+                showlegend=True
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Performance Radar Chart
+    st.markdown("### 🎯 Performance Radar Chart")
+
+    if velocity_data and spatial_data:
+        # Normalize metrics to 0-100 scale for radar chart
+        metrics = {}
+
+        if 'wrist_velocity' in velocity_data:
+            # Normalize wrist velocity (assume max possible is 12 m/s)
+            max_vel = velocity_data['wrist_velocity'].get('max', 0)
+            metrics['Wrist Velocity'] = min(100, (max_vel / 12.0) * 100)
+
+        if 'jump_height' in spatial_data:
+            # Normalize jump height (assume max is 0.8 m)
+            jump_h = spatial_data['jump_height'].get('recommended', 0)
+            if not np.isnan(jump_h):
+                metrics['Jump Height'] = min(100, (jump_h / 0.8) * 100)
+
+        if 'shoulder_angular_velocity' in velocity_data:
+            # Normalize angular velocity (assume max is 2000 deg/s)
+            ang_vel = velocity_data['shoulder_angular_velocity'].get('max', 0)
+            metrics['Shoulder Angular Vel'] = min(100, (ang_vel / 2000.0) * 100)
+
+        if 'elbow_angular_velocity' in velocity_data:
+            # Normalize angular velocity (assume max is 1500 deg/s)
+            ang_vel = velocity_data['elbow_angular_velocity'].get('max', 0)
+            metrics['Elbow Angular Vel'] = min(100, (ang_vel / 1500.0) * 100)
+
+        if 'contact_height' in spatial_data:
+            # Normalize contact height (assume max is 3.5 m)
+            contact_h = spatial_data['contact_height']
+            if not np.isnan(contact_h):
+                metrics['Contact Height'] = min(100, (contact_h / 3.5) * 100)
+
+        if len(metrics) > 0:
+            fig = go.Figure()
+
+            fig.add_trace(go.Scatterpolar(
+                r=list(metrics.values()),
+                theta=list(metrics.keys()),
+                fill='toself',
+                name='Performance'
+            ))
+
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True,
+                        range=[0, 100]
+                    )
+                ),
+                showlegend=False,
+                height=500
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.caption("Note: Values are normalized to 0-100 scale based on typical performance ranges")
+
+
 def main():
     """Main application function."""
     # Load configuration
@@ -486,6 +759,23 @@ def process_video(
         status_text.text("⏳ Calculating joint angles...")
         angle_calculator = JointAngleCalculator()
         angles_df = angle_calculator.calculate_angles_timeseries(skeleton_df)
+        progress_bar.progress(70)
+
+        # Step 6: Calculate velocities
+        status_text.text("⏳ Analyzing velocities...")
+        velocity_calculator = VelocityCalculator()
+        velocity_data = velocity_calculator.analyze_velocity_profile(
+            skeleton_df, angles_df, phases
+        )
+        velocity_df = velocity_calculator.calculate_velocity_timeseries(skeleton_df)
+        progress_bar.progress(73)
+
+        # Step 7: Calculate spatial metrics
+        status_text.text("⏳ Calculating spatial metrics...")
+        spatial_calculator = SpatialMetricsCalculator()
+        spatial_data = None
+        if phases:
+            spatial_data = spatial_calculator.calculate_spatial_profile(skeleton_df, phases)
         progress_bar.progress(75)
 
         # Step 6: Create visualizations
@@ -494,11 +784,12 @@ def process_video(
         progress_bar.progress(80)
 
         # Create tabs for different views
-        tab1, tab2, tab3, tab4 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📹 Video Preview",
             "🦴 3D Skeleton",
             "📊 Phase Analysis",
-            "📈 Joint Angles"
+            "📈 Joint Angles",
+            "🚀 Performance Metrics"
         ])
 
         # Tab 1: Video Preview
@@ -532,6 +823,12 @@ def process_video(
         # Tab 4: Joint Angles
         with tab4:
             display_joint_angles(angles_df, phases, arm_swing_phases)
+
+        # Tab 5: Performance Metrics
+        with tab5:
+            display_performance_metrics(
+                velocity_data, velocity_df, spatial_data, phases, skeleton_df
+            )
 
         progress_bar.progress(85)
 
