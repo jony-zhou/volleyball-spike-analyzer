@@ -27,6 +27,9 @@ from src.analysis.joint_angles import JointAngleCalculator
 from src.analysis.velocity_calculator import VelocityCalculator
 from src.analysis.spatial_metrics import SpatialMetricsCalculator
 from src.analysis.metrics_summary import MetricsSummary
+from src.analysis.arm_swing_classifier import ArmSwingClassifier
+from src.comparison.multi_video_comparator import MultiVideoComparator
+from src.reporting.report_generator import ReportGenerator
 
 # Configure logging
 logging.basicConfig(
@@ -592,6 +595,172 @@ def display_performance_metrics(
             st.caption("Note: Values are normalized to 0-100 scale based on typical performance ranges")
 
 
+def display_motion_classification(
+    classification: Optional[dict],
+    angles_df: Optional[pd.DataFrame],
+    phases: Optional[dict]
+):
+    """
+    Display motion classification results.
+
+    Args:
+        classification: Dictionary containing classification results.
+        angles_df: DataFrame with joint angles.
+        phases: Dictionary of phase boundaries.
+    """
+    st.subheader("Motion Classification")
+
+    if classification is None:
+        st.warning("⚠️ Motion classification not available. Arm swing phases may not have been detected.")
+        return
+
+    # Main classification result
+    st.markdown("### 🏷️ Classification Result")
+
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        motion_type = classification.get('type_display', 'Unknown')
+        st.markdown(f"## {motion_type}")
+
+        # Get motion description
+        classifier = ArmSwingClassifier()
+        description = classifier.get_motion_description(classification.get('type', ''))
+        st.info(description)
+
+    with col2:
+        confidence = classification.get('confidence', 0)
+        st.metric(
+            "Confidence",
+            f"{confidence * 100:.1f}%",
+            help="Confidence score of the classification"
+        )
+
+        has_stopping = classification.get('has_stopping_motion', False)
+        st.metric(
+            "Stopping Motion",
+            "✓ Yes" if has_stopping else "✗ No",
+            help="Whether stopping motion was detected in Phase III"
+        )
+
+    # Matched features
+    st.markdown("### 📋 Matched Features")
+
+    matched_rules = classification.get('matched_rules', [])
+    if matched_rules:
+        for rule in matched_rules:
+            st.success(f"✅ {rule}")
+    else:
+        st.info("No specific features matched")
+
+    # Detailed phase characteristics
+    with st.expander("View Detailed Phase Characteristics"):
+        features = classification.get('features', {})
+
+        if features:
+            for phase_name in ['phase_i', 'phase_ii', 'phase_iii']:
+                if phase_name in features:
+                    st.markdown(f"**{phase_name.replace('_', ' ').upper()}:**")
+
+                    phase_features = features[phase_name]
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.write(f"Wrist vs Shoulder: {phase_features.get('wrist_vs_shoulder', 'N/A')}")
+                        st.write(f"Wrist vs Forehead: {phase_features.get('wrist_vs_forehead', 'N/A')}")
+
+                    with col2:
+                        st.write(f"Elbow vs Shoulder: {phase_features.get('elbow_vs_shoulder', 'N/A')}")
+                        st.write(f"Wrist below Elbow: {phase_features.get('wrist_below_elbow', False)}")
+
+                    st.markdown("---")
+
+    # Comparison with standard (if available)
+    if angles_df is not None and phases is not None:
+        st.markdown("### 📊 Comparison with Standard Pattern")
+
+        try:
+            classifier = ArmSwingClassifier()
+            comparison = classifier.compare_with_standard(
+                # We need skeleton_df here, but it's not passed
+                # For now, just show what we have
+                None,
+                angles_df,
+                phases,
+                classification.get('type', '')
+            )
+
+            if comparison:
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    if 'elbow_angle_deviation' in comparison:
+                        deviation = comparison['elbow_angle_deviation']
+                        st.metric(
+                            "Elbow Angle Deviation",
+                            f"{abs(deviation):.1f}°",
+                            f"{'+' if deviation > 0 else ''}{deviation:.1f}°"
+                        )
+
+                with col2:
+                    if 'shoulder_angle_deviation' in comparison:
+                        deviation = comparison['shoulder_angle_deviation']
+                        st.metric(
+                            "Shoulder Angle Deviation",
+                            f"{abs(deviation):.1f}°",
+                            f"{'+' if deviation > 0 else ''}{deviation:.1f}°"
+                        )
+
+                with col3:
+                    if 'timing_similarity' in comparison:
+                        similarity = comparison['timing_similarity']
+                        st.metric(
+                            "Timing Similarity",
+                            f"{similarity * 100:.1f}%",
+                            help="Similarity to typical timing pattern"
+                        )
+        except Exception as e:
+            logger.warning(f"Could not generate comparison: {e}")
+            st.info("Standard comparison not available")
+
+    # Export classification report
+    if st.button("📄 Export Classification Report"):
+        try:
+            report_gen = ReportGenerator()
+
+            # Prepare metrics for report
+            all_metrics = {
+                'classification': classification,
+                'phases': phases if phases else {},
+                'metadata': {
+                    'timestamp': pd.Timestamp.now().isoformat()
+                }
+            }
+
+            # Generate HTML report
+            output_path = "data/output/classification_report.html"
+            report_path = report_gen.generate_html_report(
+                "Classification Analysis",
+                all_metrics,
+                output_path
+            )
+
+            st.success(f"✅ Report exported to: {report_path}")
+
+            # Provide download button
+            with open(report_path, 'rb') as f:
+                st.download_button(
+                    "📥 Download Report",
+                    f,
+                    file_name="classification_report.html",
+                    mime="text/html"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to export report: {e}")
+            st.error(f"Failed to export report: {str(e)}")
+
+
 def main():
     """Main application function."""
     # Load configuration
@@ -776,6 +945,16 @@ def process_video(
         spatial_data = None
         if phases:
             spatial_data = spatial_calculator.calculate_spatial_profile(skeleton_df, phases)
+        progress_bar.progress(73)
+
+        # Step 8: Classify arm swing motion
+        status_text.text("⏳ Classifying arm swing motion...")
+        classification = None
+        if arm_swing_phases:
+            classifier = ArmSwingClassifier()
+            classification = classifier.classify_arm_swing(
+                skeleton_df, phases, arm_swing_phases, velocity_df
+            )
         progress_bar.progress(75)
 
         # Step 6: Create visualizations
@@ -784,12 +963,13 @@ def process_video(
         progress_bar.progress(80)
 
         # Create tabs for different views
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📹 Video Preview",
             "🦴 3D Skeleton",
             "📊 Phase Analysis",
             "📈 Joint Angles",
-            "🚀 Performance Metrics"
+            "🚀 Performance Metrics",
+            "🏷️ Motion Classification"
         ])
 
         # Tab 1: Video Preview
@@ -829,6 +1009,10 @@ def process_video(
             display_performance_metrics(
                 velocity_data, velocity_df, spatial_data, phases, skeleton_df
             )
+
+        # Tab 6: Motion Classification
+        with tab6:
+            display_motion_classification(classification, angles_df, phases)
 
         progress_bar.progress(85)
 
