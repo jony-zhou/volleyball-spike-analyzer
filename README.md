@@ -6,11 +6,22 @@ A computer vision-based system for analyzing volleyball spike techniques using p
 
 ## ✨ Features
 
+### Core Analysis
 - **📹 Video Upload** - Support for multiple video formats (MP4, AVI, MOV, MKV)
 - **🤖 Pose Extraction** - Real-time skeleton tracking using MediaPipe Pose
 - **📊 2D & 3D Coordinates** - Extract both 2D and 3D landmark positions
 - **🎬 3D Visualization** - Interactive 3D skeleton animation using Plotly
-- **📈 Biomechanical Analysis** - Calculate joint angles, velocities, and trajectories
+
+### Advanced Analysis (NEW)
+- **🎯 Phase Detection** - Automatic detection of 5 motion phases (Approach → Takeoff → Arm Swing → Contact → Landing)
+- **📐 Joint Angle Analysis** - Calculate key angles (shoulder abduction, elbow flexion, torso rotation)
+- **🚀 Velocity Analysis** - Linear and angular velocities for wrist, elbow, and shoulder
+- **📏 Spatial Metrics** - Jump height, contact height, flight time, horizontal displacement
+- **🏷️ Motion Classification** - Classify arm swing into 5 types (Straight, Bow-Arrow High/Low, Snap, Circular)
+- **🔄 Multi-Video Comparison** - Side-by-side comparison with similarity metrics
+- **📄 Report Generation** - Comprehensive HTML and text reports
+
+### Export & Integration
 - **💾 Data Export** - Export pose data to CSV/JSON for further analysis
 - **🖥️ Web Interface** - User-friendly interface built with Streamlit
 
@@ -82,29 +93,107 @@ Export the analysis results:
 - **Joint Angles (CSV)** - Frame-by-frame angle measurements
 - **Summary (JSON)** - Statistical summary of the analysis
 
+## 📊 Analysis Features
+
+### Motion Phase Detection
+
+The system automatically detects 5 key phases of volleyball spike motion:
+
+1. **Approach** - Running phase with high horizontal velocity
+2. **Takeoff** - Jump initiation with peak vertical acceleration
+3. **Arm Swing** - Arm movement from start to peak velocity
+4. **Contact** - Ball contact phase around peak hand velocity
+5. **Landing** - Descent and ground contact
+
+Additionally, the arm swing phase is further divided into 3 sub-phases based on research literature:
+- **Phase I (Initiation)** - Wrist and elbow start rising
+- **Phase II (Wind-up)** - Wrist reaches maximum height
+- **Phase III (Final Cocking)** - Wrist descends and accelerates
+
+### Arm Swing Classification
+
+The system classifies arm swing motions into 5 types:
+
+1. **Straight** - High arc motion with stopping
+2. **Bow-Arrow High** - Very high arc with stopping (maximum power)
+3. **Bow-Arrow Low** - Medium arc with stopping (balanced approach)
+4. **Snap** - Horizontal motion at shoulder height (quick attack)
+5. **Circular** - Continuous low motion without stopping (fastest)
+
+### Biomechanical Metrics
+
+**Joint Angles:**
+- Shoulder abduction angle
+- Shoulder horizontal abduction
+- Elbow flexion angle
+- Torso rotation angle
+- Torso lean angle
+
+**Velocity Metrics:**
+- Wrist linear velocity (max, mean, at contact)
+- Elbow linear velocity
+- Shoulder linear velocity
+- Shoulder angular velocity
+- Elbow angular velocity
+
+**Spatial Metrics:**
+- Jump height (2 calculation methods)
+- Contact point height
+- Flight time
+- Horizontal displacement (forward & lateral)
+- Center of mass trajectory
+
+### Multi-Video Comparison
+
+Compare multiple spike videos side-by-side:
+- Aligned velocity profiles (synchronized by contact frame)
+- Radar charts for performance metrics
+- Similarity scoring between techniques
+- Comparison tables with all key metrics
+
+### Report Generation
+
+Generate comprehensive analysis reports:
+- **HTML Reports** - Interactive, styled reports with all metrics
+- **Text Reports** - Plain text summaries for quick review
+- **CSV Exports** - Detailed frame-by-frame data for custom analysis
+- **JSON Exports** - Structured data for programmatic access
+
 ## 🏗️ Project Structure
 
 ```
 volleyball-spike-analyzer/
-├── app.py                      # Main Streamlit application
+├── app.py                              # Main Streamlit application
 ├── config/
-│   └── config.yaml             # Configuration settings
+│   └── config.yaml                     # Configuration settings
 ├── src/
 │   ├── core/
-│   │   ├── pose_extractor.py      # MediaPipe pose extraction
-│   │   └── skeleton_processor.py  # Skeleton data processing
+│   │   ├── pose_extractor.py          # MediaPipe pose extraction
+│   │   └── skeleton_processor.py      # Skeleton data processing
+│   ├── analysis/                       # Analysis modules (NEW)
+│   │   ├── phase_detector.py          # 5-phase and 3-phase detection
+│   │   ├── joint_angles.py            # Joint angle calculations
+│   │   ├── velocity_calculator.py     # Linear & angular velocity
+│   │   ├── spatial_metrics.py         # Jump height, displacement
+│   │   ├── arm_swing_classifier.py    # Motion type classification
+│   │   └── metrics_summary.py         # Results aggregation
+│   ├── comparison/                     # Multi-video comparison (NEW)
+│   │   └── multi_video_comparator.py  # Side-by-side comparison
+│   ├── reporting/                      # Report generation (NEW)
+│   │   └── report_generator.py        # HTML/Text reports
 │   ├── visualization/
-│   │   ├── video_overlay.py       # 2D skeleton overlay
-│   │   └── skeleton_3d.py         # 3D visualization
+│   │   ├── video_overlay.py           # 2D skeleton overlay
+│   │   └── skeleton_3d.py             # 3D visualization
 │   └── utils/
-│       ├── video_io.py            # Video I/O operations
-│       └── data_export.py         # Data export utilities
+│       ├── video_io.py                # Video I/O operations
+│       └── data_export.py             # Data export utilities
 ├── tests/
-│   └── test_pose_extractor.py  # Unit tests
+│   ├── test_pose_extractor.py         # Unit tests
+│   └── test_joint_angles.py           # Angle calculation tests
 └── data/
-    ├── input/                  # Input videos
-    ├── output/                 # Processed results
-    └── cache/                  # Temporary cache
+    ├── input/                          # Input videos
+    ├── output/                         # Processed results
+    └── cache/                          # Temporary cache
 ```
 
 ## ⚙️ Configuration
@@ -190,27 +279,33 @@ mypy src/
 
 ## 🗺️ Roadmap
 
-### ✅ Phase 1: MVP (Current)
+### ✅ Phase 1: MVP (Completed)
 - [x] Project structure setup
 - [x] Basic pose extraction
 - [x] 3D skeleton visualization
 - [x] Streamlit interface
 - [x] Data export functionality
 
-### 📋 Phase 2: Enhanced Analysis
-- [ ] Automatic spike phase detection (approach, jump, hit, landing)
-- [ ] Velocity and acceleration metrics
-- [ ] Power calculation and jump height estimation
-- [ ] Side-by-side comparison of multiple videos
-- [ ] Performance metrics dashboard
+### ✅ Phase 2: Enhanced Analysis (Completed)
+- [x] Automatic spike phase detection (5 phases: approach → takeoff → arm swing → contact → landing)
+- [x] Arm swing sub-phase detection (Phase I/II/III based on research)
+- [x] Velocity and acceleration metrics (linear & angular)
+- [x] Jump height estimation (2 methods: hip displacement & flight time)
+- [x] Contact height and horizontal displacement
+- [x] Side-by-side comparison of multiple videos
+- [x] Motion classification (5 arm swing types)
+- [x] Comprehensive report generation (HTML/Text)
+- [x] Performance metrics dashboard
 
-### 🚀 Phase 3: Advanced Features
+### 🚀 Phase 3: Future Enhancements
 - [ ] Multi-player tracking
-- [ ] Technique scoring system
-- [ ] Movement recommendations
-- [ ] Historical trend analysis
-- [ ] Export to video with overlays
+- [ ] Technique scoring system with personalized recommendations
+- [ ] Movement recommendations based on classification
+- [ ] Historical trend analysis across multiple sessions
+- [ ] Export to video with overlays and annotations
 - [ ] Batch processing for multiple videos
+- [ ] PDF report generation
+- [ ] Real-time analysis from webcam/camera feed
 
 ## 🤝 Contributing
 
