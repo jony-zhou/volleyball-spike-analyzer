@@ -4,7 +4,10 @@
       "Bash(mkdir:*)",
       "Bash(dir:*)",
       "Bash(findstr:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []
